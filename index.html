@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OmniFlip Engine - Quantitative OSRS GE Trading Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        osrs: {
+                            dark: '#0f172a',
+                            card: '#1e293b',
+                            accent: '#f59e0b',
+                            gold: '#fbbf24',
+                            green: '#10b981',
+                            red: '#ef4444'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen pb-12">
+
+    <!-- Header Navigation -->
+    <header class="border-b border-slate-800 bg-slate-950/80 backdrop-blur sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 py-4 flex flex-wrap justify-between items-center gap-4">
+            <div class="flex items-center space-x-3">
+                <div class="p-2 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                    <svg class="w-6 h-6 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="text-xl font-extrabold text-amber-400 tracking-tight">OMNIFLIP ENGINE</h1>
+                    <p class="text-xs text-slate-400">Quantitative GE Trading & Arbitrage Intelligence</p>
+                </div>
+            </div>
+
+            <div class="flex items-center space-x-4">
+                <div class="text-right">
+                    <div class="text-xs text-slate-400">Last Telemetry Sync</div>
+                    <div id="last-updated" class="text-xs font-mono font-semibold text-emerald-400">Loading...</div>
+                </div>
+                <button onclick="fetchData()" class="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-bold rounded-md transition shadow">
+                    Refresh Data
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 mt-6 space-y-8">
+
+        <!-- Metrics Overview Grid -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div class="bg-slate-800/80 border border-slate-700/60 rounded-xl p-4">
+                <div class="text-xs font-medium text-slate-400">Analyzed Items</div>
+                <div id="stat-analyzed" class="text-2xl font-bold text-slate-100 mt-1">-</div>
+            </div>
+            <div class="bg-slate-800/80 border border-slate-700/60 rounded-xl p-4">
+                <div class="text-xs font-medium text-slate-400">Top Flip Signals</div>
+                <div id="stat-flips" class="text-2xl font-bold text-amber-400 mt-1">-</div>
+            </div>
+            <div class="bg-slate-800/80 border border-slate-700/60 rounded-xl p-4">
+                <div class="text-xs font-medium text-slate-400">Decant Arbitrages</div>
+                <div id="stat-decants" class="text-2xl font-bold text-emerald-400 mt-1">-</div>
+            </div>
+            <div class="bg-slate-800/80 border border-slate-700/60 rounded-xl p-4">
+                <div class="text-xs font-medium text-slate-400">Panic Snipes ($Z$-Score)</div>
+                <div id="stat-snipes" class="text-2xl font-bold text-rose-400 mt-1">-</div>
+            </div>
+        </div>
+
+        <!-- Bankroll Allocation Kelly Calculator -->
+        <section class="bg-gradient-to-r from-slate-800 to-slate-850 border border-amber-500/30 rounded-2xl p-6 shadow-xl">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+                <div>
+                    <h2 class="text-lg font-bold text-amber-400 flex items-center gap-2">
+                        <span>⚡ 8-Slot Fractional Kelly Bankroll Optimizer</span>
+                    </h2>
+                    <p class="text-xs text-slate-400 mt-0.5">Input your liquid cash to receive optimal GE slot trade allocations.</p>
+                </div>
+                <div class="flex items-center space-x-3 w-full md:w-auto">
+                    <label class="text-xs text-slate-300 font-medium">Liquid Bankroll (GP):</label>
+                    <input type="number" id="bankroll-input" value="50000000" step="1000000" oninput="calculateKellyAllocation()" 
+                           class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm font-mono text-amber-300 focus:outline-none focus:border-amber-500 w-48">
+                </div>
+            </div>
+
+            <div id="kelly-slots-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                <!-- Slot cards generated dynamically -->
+            </div>
+        </section>
+
+        <!-- Main Content Tabs -->
+        <section class="space-y-4">
+            <div class="flex border-b border-slate-800 space-x-6 text-sm font-semibold">
+                <button id="tab-btn-flips" onclick="switchTab('flips')" class="pb-3 text-amber-400 border-b-2 border-amber-400 transition">Quantitative Flips</button>
+                <button id="tab-btn-decant" onclick="switchTab('decant')" class="pb-3 text-slate-400 hover:text-slate-200 border-b-2 border-transparent transition">Potion Decant Matrix</button>
+                <button id="tab-btn-snipes" onclick="switchTab('snipes')" class="pb-3 text-slate-400 hover:text-slate-200 border-b-2 border-transparent transition">Capitulation Snipes</button>
+            </div>
+
+            <!-- Tab 1: Quantitative Flips -->
+            <div id="tab-content-flips" class="space-y-4">
+                <div class="flex flex-wrap justify-between items-center gap-3">
+                    <input type="text" id="search-input" placeholder="Search item name..." onkeyup="filterFlips()"
+                           class="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500 w-64">
+                    
+                    <div class="flex items-center space-x-4 text-xs">
+                        <label class="flex items-center space-x-2 text-slate-300 cursor-pointer">
+                            <input type="checkbox" id="f2p-only" onchange="filterFlips()" class="rounded bg-slate-900 border-slate-700 text-amber-500 focus:ring-0">
+                            <span>F2P Only</span>
+                        </label>
+                        <span class="text-slate-500">|</span>
+                        <span id="flips-count" class="text-slate-400">Showing 0 opportunities</span>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto border border-slate-800 rounded-xl bg-slate-900/60">
+                    <table class="w-full text-left text-xs">
+                        <thead class="bg-slate-800/90 text-slate-400 uppercase font-semibold">
+                            <tr>
+                                <th class="p-3">Item Name</th>
+                                <th class="p-3 text-right">Buy Target (Front-Run)</th>
+                                <th class="p-3 text-right">Sell Target (Front-Run)</th>
+                                <th class="p-3 text-right">Tax</th>
+                                <th class="p-3 text-right">Net Margin</th>
+                                <th class="p-3 text-right">ROI %</th>
+                                <th class="p-3 text-right">Hourly Vol</th>
+                                <th class="p-3 text-right">VMS Score</th>
+                            </tr>
+                        </thead>
+                        <tbody id="table-flips-body" class="divide-y divide-slate-800/60 font-mono">
+                            <!-- Rows loaded dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Tab 2: Potion Decant Matrix -->
+            <div id="tab-content-decant" class="hidden space-y-4">
+                <div class="overflow-x-auto border border-slate-800 rounded-xl bg-slate-900/60">
+                    <table class="w-full text-left text-xs">
+                        <thead class="bg-slate-800/90 text-slate-400 uppercase font-semibold">
+                            <tr>
+                                <th class="p-3">Potion Family</th>
+                                <th class="p-3 text-right">1-Dose Low Price</th>
+                                <th class="p-3 text-right">Cost (4x 1-Dose)</th>
+                                <th class="p-3 text-right">4-Dose High Sell</th>
+                                <th class="p-3 text-right">GE Tax</th>
+                                <th class="p-3 text-right">Profit / Combine</th>
+                                <th class="p-3 text-right">ROI %</th>
+                                <th class="p-3 text-right">4D Buy Limit</th>
+                            </tr>
+                        </thead>
+                        <tbody id="table-decant-body" class="divide-y divide-slate-800/60 font-mono">
+                            <!-- Decant rows -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Tab 3: Panic Snipes -->
+            <div id="tab-content-snipes" class="hidden space-y-4">
+                <div class="overflow-x-auto border border-slate-800 rounded-xl bg-slate-900/60">
+                    <table class="w-full text-left text-xs">
+                        <thead class="bg-slate-800/90 text-slate-400 uppercase font-semibold">
+                            <tr>
+                                <th class="p-3">Panic Item</th>
+                                <th class="p-3 text-right">Current Low</th>
+                                <th class="p-3 text-right">Target Sell</th>
+                                <th class="p-3 text-right">Margin</th>
+                                <th class="p-3 text-right">ROI Potential</th>
+                                <th class="p-3 text-right">Buy Limit</th>
+                            </tr>
+                        </thead>
+                        <tbody id="table-snipes-body" class="divide-y divide-slate-800/60 font-mono">
+                            <!-- Snipe rows -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </section>
+    </main>
+
+    <script>
+        let globalData = null;
+
+        async function fetchData() {
+            try {
+                const res = await fetch('data.json?t=' + Date.now());
+                if (!res.ok) throw new Error('Failed to fetch telemetry artifact');
+                globalData = await res.json();
+                renderDashboard();
+            } catch (err) {
+                console.error(err);
+                document.getElementById('last-updated').innerText = 'Data fetch error';
+            }
+        }
+
+        function renderDashboard() {
+            if (!globalData) return;
+
+            document.getElementById('last-updated').innerText = new Date(globalData.updated_at).toLocaleString();
+            
+            document.getElementById('stat-analyzed').innerText = (globalData.summary?.total_items_analyzed || 0).toLocaleString();
+            document.getElementById('stat-flips').innerText = (globalData.summary?.profitable_flips_found || 0).toLocaleString();
+            document.getElementById('stat-decants').innerText = (globalData.summary?.decant_arbitrages_found || 0).toLocaleString();
+            document.getElementById('stat-snipes').innerText = (globalData.summary?.panic_snipes_found || 0).toLocaleString();
+
+            renderFlipsTable(globalData.top_flips || []);
+            renderDecantTable(globalData.decant_arbitrage || []);
+            renderSnipesTable(globalData.panic_snipes || []);
+            calculateKellyAllocation();
+        }
+
+        function renderFlipsTable(flips) {
+            const tbody = document.getElementById('table-flips-body');
+            tbody.innerHTML = '';
+
+            flips.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-800/40 transition";
+                tr.innerHTML = `
+                    <td class="p-3 font-sans font-semibold text-slate-200">
+                        ${item.name}
+                        ${!item.members ? '<span class="ml-1 px-1.5 py-0.5 text-[9px] bg-slate-700 text-slate-300 rounded">F2P</span>' : ''}
+                    </td>
+                    <td class="p-3 text-right text-emerald-400 font-bold">${item.action_buy_at.toLocaleString()} GP</td>
+                    <td class="p-3 text-right text-amber-400 font-bold">${item.action_sell_at.toLocaleString()} GP</td>
+                    <td class="p-3 text-right text-slate-400">${item.tax.toLocaleString()} GP</td>
+                    <td class="p-3 text-right text-emerald-300 font-bold">+${item.net_margin.toLocaleString()} GP</td>
+                    <td class="p-3 text-right ${item.roi_pct >= 5 ? 'text-amber-400 font-bold' : 'text-slate-300'}">${item.roi_pct}%</td>
+                    <td class="p-3 text-right text-slate-300">${item.hourly_volume.toLocaleString()}</td>
+                    <td class="p-3 text-right text-amber-300 font-bold">${item.vms_score.toLocaleString()}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            document.getElementById('flips-count').innerText = `Showing ${flips.length} opportunities`;
+        }
+
+        function renderDecantTable(decants) {
+            const tbody = document.getElementById('table-decant-body');
+            tbody.innerHTML = '';
+
+            decants.forEach(d => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-800/40 transition";
+                tr.innerHTML = `
+                    <td class="p-3 font-sans font-semibold text-slate-200">${d.potion}</td>
+                    <td class="p-3 text-right text-slate-300">${d.buy_1d_price.toLocaleString()} GP</td>
+                    <td class="p-3 text-right text-slate-400">${d.cost_4d_equiv.toLocaleString()} GP</td>
+                    <td class="p-3 text-right text-amber-400 font-bold">${d.sell_4d_price.toLocaleString()} GP</td>
+                    <td class="p-3 text-right text-slate-400">${d.tax.toLocaleString()} GP</td>
+                    <td class="p-3 text-right text-emerald-400 font-bold">+${d.profit_per_combine.toLocaleString()} GP</td>
+                    <td class="p-3 text-right text-amber-300">${d.roi_pct}%</td>
+                    <td class="p-3 text-right text-slate-300">${d.buy_limit_4d.toLocaleString()}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function renderSnipesTable(snipes) {
+            const tbody = document.getElementById('table-snipes-body');
+            tbody.innerHTML = '';
+
+            snipes.forEach(s => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-800/40 transition";
+                tr.innerHTML = `
+                    <td class="p-3 font-sans font-semibold text-slate-200">${s.name}</td>
+                    <td class="p-3 text-right text-emerald-400 font-bold">${s.low_price.toLocaleString()} GP</td>
+                    <td class="p-3 text-right text-amber-400 font-bold">${s.action_sell_at.toLocaleString()} GP</td>
+                    <td class="p-3 text-right text-emerald-300">+${s.net_margin.toLocaleString()} GP</td>
+                    <td class="p-3 text-right text-rose-400 font-extrabold">${s.roi_pct}%</td>
+                    <td class="p-3 text-right text-slate-300">${s.buy_limit.toLocaleString()}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function calculateKellyAllocation() {
+            if (!globalData || !globalData.top_flips) return;
+
+            const totalBankroll = parseFloat(document.getElementById('bankroll-input').value) || 50000000;
+            const container = document.getElementById('kelly-slots-grid');
+            container.innerHTML = '';
+
+            const perSlotCap = totalBankroll / 8;
+            const candidates = globalData.top_flips.slice(0, 8);
+
+            candidates.forEach((item, index) => {
+                const unitPrice = item.action_buy_at;
+                const maxByLimit = item.buy_limit;
+                const maxByCap = Math.floor(perSlotCap / unitPrice);
+                const allocQty = Math.min(maxByLimit, maxByCap);
+                const investedGP = allocQty * unitPrice;
+                const estProfitGP = allocQty * item.net_margin;
+
+                const card = document.createElement('div');
+                card.className = "bg-slate-900/80 border border-slate-700/80 rounded-xl p-3 space-y-2 relative overflow-hidden";
+                card.innerHTML = `
+                    <div class="flex justify-between items-center">
+                        <span class="text-[10px] font-bold uppercase tracking-wider text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">Slot #${index + 1}</span>
+                        <span class="text-[10px] font-mono text-slate-400">${item.roi_pct}% ROI</span>
+                    </div>
+                    <div class="font-bold text-sm text-slate-100 truncate">${item.name}</div>
+                    <div class="text-xs space-y-1 font-mono text-slate-300">
+                        <div class="flex justify-between"><span class="text-slate-500">Buy At:</span> <span class="text-emerald-400 font-bold">${unitPrice.toLocaleString()} GP</span></div>
+                        <div class="flex justify-between"><span class="text-slate-500">Target Qty:</span> <span>${allocQty.toLocaleString()} / ${maxByLimit.toLocaleString()}</span></div>
+                        <div class="flex justify-between"><span class="text-slate-500">Capital:</span> <span>${(investedGP / 1000000).toFixed(2)}M GP</span></div>
+                        <div class="flex justify-between border-t border-slate-800 pt-1 mt-1"><span class="text-slate-400">Est Profit:</span> <span class="text-emerald-400 font-bold">+${estProfitGP.toLocaleString()} GP</span></div>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        function filterFlips() {
+            if (!globalData) return;
+            const query = document.getElementById('search-input').value.toLowerCase();
+            const f2pOnly = document.getElementById('f2p-only').checked;
+
+            const filtered = globalData.top_flips.filter(item => {
+                const matchesQuery = item.name.toLowerCase().includes(query);
+                const matchesF2P = f2pOnly ? !item.members : true;
+                return matchesQuery && matchesF2P;
+            });
+
+            renderFlipsTable(filtered);
+        }
+
+        function switchTab(tab) {
+            ['flips', 'decant', 'snipes'].forEach(t => {
+                document.getElementById(`tab-content-${t}`).classList.add('hidden');
+                document.getElementById(`tab-btn-${t}`).className = "pb-3 text-slate-400 hover:text-slate-200 border-b-2 border-transparent transition";
+            });
+
+            document.getElementById(`tab-content-${tab}`).classList.remove('hidden');
+            document.getElementById(`tab-btn-${tab}`).className = "pb-3 text-amber-400 border-b-2 border-amber-400 transition";
+        }
+
+        fetchData();
+    </script>
+</body>
+</html>
